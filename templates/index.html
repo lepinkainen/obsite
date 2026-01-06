@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Site.Title}}</title>
+    <meta name="description" content="{{.Site.Description}}">
+    <link rel="alternate" type="application/rss+xml" title="RSS Feed" href="/feed.xml">
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+            color: #333;
+        }
+        a { color: #0066cc; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        header { margin-bottom: 2rem; border-bottom: 1px solid #eee; padding-bottom: 1rem; }
+        header h1 { margin: 0; }
+        header h1 a { color: inherit; }
+        nav { margin-top: 0.5rem; }
+        nav a { margin-right: 1rem; }
+        article { margin-bottom: 2rem; }
+        .post-meta { color: #666; font-size: 0.9rem; margin-bottom: 1rem; }
+        .pagination { margin-top: 2rem; display: flex; justify-content: space-between; }
+        footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid #eee; color: #666; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1><a href="/">{{.Site.Title}}</a></h1>
+        <nav>
+            <a href="/">Home</a>
+            <a href="/feed.xml">RSS</a>
+        </nav>
+    </header>
+    <main>
+        {{range .Posts}}
+        <article>
+            <h2><a href="{{.URL}}">{{.Title}}</a></h2>
+            <div class="post-meta">
+                <time datetime="{{.RFCDate}}">{{.FormattedDate}}</time>
+            </div>
+            {{if .Description}}
+            <p>{{.Description}}</p>
+            {{end}}
+        </article>
+        {{end}}
+
+        {{if or .PrevPage .NextPage}}
+        <div class="pagination">
+            {{if .PrevPage}}
+            <a href="{{.PrevPage}}">&larr; Newer Posts</a>
+            {{else}}
+            <span></span>
+            {{end}}
+            {{if .NextPage}}
+            <a href="{{.NextPage}}">Older Posts &rarr;</a>
+            {{end}}
+        </div>
+        {{end}}
+    </main>
+    <footer>
+        <p>&copy; {{.Site.Author}}</p>
+    </footer>
+</body>
+</html>

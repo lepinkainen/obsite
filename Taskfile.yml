@@ -1,0 +1,89 @@
+# Taskfile for obsite (https://taskfile.dev/)
+version: '3'
+
+vars:
+  BUILD_DIR: build
+  PROJECT_NAME: obsite
+
+tasks:
+  # Core build task - depends on tests and linting
+  build:
+    desc: Build the project
+    deps: [test, lint]
+    cmds:
+      - task: build-go
+
+  # Linux-specific build
+  build-linux:
+    desc: Build for Linux
+    deps: [test, lint]
+    env:
+      GOOS: linux
+      GOARCH: amd64
+    cmds:
+      - task: build-go
+
+  # CI build without tests/linting (run separately in CI)
+  build-ci:
+    desc: Build for CI/CD (build only)
+    cmds:
+      - task: build-go
+
+  # Test tasks
+  test:
+    desc: Run tests
+    cmds:
+      - task: test-go
+
+  test-ci:
+    desc: Run tests with coverage for CI
+    cmds:
+      - task: test-go-ci
+
+  # Linting tasks
+  lint:
+    desc: Lint code
+    cmds:
+      - task: lint-go
+
+  # Clean build artifacts
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -rf {{.BUILD_DIR}}
+      - mkdir -p {{.BUILD_DIR}}
+
+  # Go tasks
+  build-go:
+    desc: Build Go project
+    cmds:
+      - mkdir -p {{.BUILD_DIR}}
+      - go build -v -o {{.BUILD_DIR}}/{{.PROJECT_NAME}} .
+    sources:
+      - ./*.go
+      - internal/**/*.go
+    generates:
+      - "{{.BUILD_DIR}}/{{.PROJECT_NAME}}"
+
+  test-go:
+    desc: Run Go tests
+    cmds:
+      - go test $(go list ./... | grep -v llm-shared)
+
+  test-go-ci:
+    desc: Run Go tests with coverage for CI
+    cmds:
+      - go test -tags=ci -cover -v $(go list ./... | grep -v llm-shared)
+
+  lint-go:
+    desc: Lint Go code
+    cmds:
+      - find . -name "*.go" -not -path "./llm-shared/*" -exec goimports -w {} +
+      - go vet $(go list ./... | grep -v llm-shared)
+      - golangci-lint run ./...
+
+  # Development task
+  dev:
+    desc: Start development server with live reload
+    cmds:
+      - go run . -serve blog

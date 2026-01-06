@@ -1,0 +1,1 @@
+Read [my article](/2024/01/target-post/) about this topic.

@@ -1,0 +1,19 @@
+# Binary
+build/
+obsite
+
+# Input
+blog/
+
+# Output directory
+site/
+test-output/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+.task/
+
+# OS
+.DS_Store

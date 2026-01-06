@@ -1,0 +1,1 @@
+See [[Target Post|this article]] for details.

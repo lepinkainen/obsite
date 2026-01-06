@@ -1,0 +1,1 @@
+See [this article](/2024/01/target-post/) for details.

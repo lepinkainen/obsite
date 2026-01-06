@@ -1,0 +1,116 @@
+package generator
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	"obsite/internal/models"
+)
+
+var updateGolden = os.Getenv("UPDATE_GOLDEN") == "true"
+
+// fixedTime creates a FlexibleTime for testing
+func fixedTime(year int, month time.Month, day int) models.FlexibleTime {
+	return models.FlexibleTime{Time: time.Date(year, month, day, 0, 0, 0, 0, time.UTC)}
+}
+
+// testPosts returns a set of fake posts for link resolution testing
+func testPosts() []*models.Post {
+	return []*models.Post{
+		{
+			Slug:    "target-post",
+			Created: fixedTime(2024, 1, 15),
+		},
+		{
+			Slug:    "another-post",
+			Created: fixedTime(2024, 2, 20),
+		},
+	}
+}
+
+func TestLinkResolver_Resolve(t *testing.T) {
+	resolver := NewLinkResolver(testPosts())
+
+	inputFiles, err := filepath.Glob("testdata/*.input.md")
+	if err != nil {
+		t.Fatalf("failed to glob input files: %v", err)
+	}
+
+	if len(inputFiles) == 0 {
+		t.Fatal("no input files found in testdata/")
+	}
+
+	for _, inputFile := range inputFiles {
+		name := strings.TrimSuffix(filepath.Base(inputFile), ".input.md")
+
+		t.Run(name, func(t *testing.T) {
+			input, err := os.ReadFile(inputFile)
+			if err != nil {
+				t.Fatalf("failed to read input file: %v", err)
+			}
+
+			post := &models.Post{
+				Content:  string(input),
+				FilePath: "test.md",
+			}
+			got, linkErrors := resolver.Resolve(post)
+
+			// Handle broken link test case
+			if strings.HasPrefix(name, "broken") {
+				if len(linkErrors) == 0 {
+					t.Error("expected link errors for broken link test, got none")
+				}
+				return
+			}
+
+			// For non-broken tests, expect no errors
+			if len(linkErrors) > 0 {
+				t.Errorf("unexpected link errors: %v", linkErrors)
+			}
+
+			goldenFile := strings.Replace(inputFile, ".input.md", ".golden.md", 1)
+
+			if updateGolden {
+				if err := os.WriteFile(goldenFile, []byte(got), 0644); err != nil {
+					t.Fatalf("failed to update golden file: %v", err)
+				}
+				return
+			}
+
+			expected, err := os.ReadFile(goldenFile)
+			if err != nil {
+				t.Fatalf("failed to read golden file %s: %v", goldenFile, err)
+			}
+
+			if got != string(expected) {
+				t.Errorf("output mismatch\ngot:\n%s\nwant:\n%s", got, expected)
+			}
+		})
+	}
+}
+
+func TestLinkResolver_BrokenLinkError(t *testing.T) {
+	resolver := NewLinkResolver(testPosts())
+
+	post := &models.Post{
+		Content:  "Link to [[Missing Page]] here",
+		FilePath: "source.md",
+	}
+
+	_, errors := resolver.Resolve(post)
+
+	if len(errors) != 1 {
+		t.Fatalf("expected 1 error, got %d", len(errors))
+	}
+
+	err := errors[0]
+	if err.TargetSlug != "missing-page" {
+		t.Errorf("expected target slug 'missing-page', got %q", err.TargetSlug)
+	}
+	if err.LinkText != "[[Missing Page]]" {
+		t.Errorf("expected link text '[[Missing Page]]', got %q", err.LinkText)
+	}
+}

@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+    <title>{{.Site.Title}}</title>
+    <description>{{.Site.Description}}</description>
+    <link>{{.Site.BaseURL}}</link>
+    <atom:link href="{{.Site.BaseURL}}/feed.xml" rel="self" type="application/rss+xml"/>
+    <lastBuildDate>{{.BuildDate}}</lastBuildDate>
+    {{range .Posts}}
+    <item>
+        <title>{{.Title}}</title>
+        <link>{{.FullURL}}</link>
+        <guid>{{.FullURL}}</guid>
+        <pubDate>{{.RFCDate}}</pubDate>
+        {{if .Description}}<description>{{.Description}}</description>{{end}}
+    </item>
+    {{end}}
+</channel>
+</rss>

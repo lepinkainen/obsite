@@ -1,0 +1,1 @@
+Check [this post](../posts/Another Post.md) too.

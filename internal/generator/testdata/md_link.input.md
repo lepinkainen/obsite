@@ -1,0 +1,1 @@
+Read [my article](./Target Post.md) about this topic.

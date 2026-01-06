@@ -1,0 +1,1 @@
+Check out [Target Post](/2024/01/target-post/) for more info.
