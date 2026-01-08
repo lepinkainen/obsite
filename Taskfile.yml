@@ -62,6 +62,7 @@ tasks:
     sources:
       - ./*.go
       - internal/**/*.go
+      - templates/**/*
     generates:
       - "{{.BUILD_DIR}}/{{.PROJECT_NAME}}"
 

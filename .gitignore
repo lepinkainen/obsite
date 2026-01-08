@@ -5,9 +5,11 @@ obsite
 # Input
 blog/
 
-# Output directory
+# Input & Output directory
+blog
 site/
 test-output/
+public/
 
 # IDE
 .idea/

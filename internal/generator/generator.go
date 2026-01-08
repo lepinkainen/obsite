@@ -67,6 +67,14 @@ func (g *Generator) Generate() error {
 		return fmt.Errorf("creating target: %w", err)
 	}
 
+	// Generate stylesheet and theme script
+	if err := g.generateStylesheet(); err != nil {
+		return fmt.Errorf("generating stylesheet: %w", err)
+	}
+	if err := g.generateThemeScript(); err != nil {
+		return fmt.Errorf("generating theme script: %w", err)
+	}
+
 	// Generate post pages
 	for _, post := range g.Posts {
 		if err := g.generatePost(post); err != nil {
@@ -347,10 +355,55 @@ func (g *Generator) generateSitemap() error {
 	return nil
 }
 
+func (g *Generator) generateStylesheet() error {
+	// Try production path first, then test path
+	cssPath := "templates/styles.css"
+	cssContent, err := g.templateFS.ReadFile(cssPath)
+	if err != nil {
+		cssPath = "testdata/templates/styles.css"
+		cssContent, err = g.templateFS.ReadFile(cssPath)
+		if err != nil {
+			return fmt.Errorf("reading styles.css: %w", err)
+		}
+	}
+
+	outPath := filepath.Join(g.Target, "styles.css")
+	if err := os.WriteFile(outPath, cssContent, 0644); err != nil {
+		return fmt.Errorf("writing styles.css: %w", err)
+	}
+
+	return nil
+}
+
+func (g *Generator) generateThemeScript() error {
+	// Try production path first, then test path
+	jsPath := "templates/theme.js"
+	jsContent, err := g.templateFS.ReadFile(jsPath)
+	if err != nil {
+		jsPath = "testdata/templates/theme.js"
+		jsContent, err = g.templateFS.ReadFile(jsPath)
+		if err != nil {
+			return fmt.Errorf("reading theme.js: %w", err)
+		}
+	}
+
+	outPath := filepath.Join(g.Target, "theme.js")
+	if err := os.WriteFile(outPath, jsContent, 0644); err != nil {
+		return fmt.Errorf("writing theme.js: %w", err)
+	}
+
+	return nil
+}
+
 func (g *Generator) copyAssets() error {
 	return filepath.Walk(g.Source, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
+		}
+
+		// Skip the source directory itself (handles symlinks)
+		if path == g.Source {
+			return nil
 		}
 
 		// Skip markdown files and directories

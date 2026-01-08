@@ -238,3 +238,63 @@ func TestGenerateIndex_ElevenPosts(t *testing.T) {
 		t.Error("page/2/index.html should exist for 11 posts")
 	}
 }
+
+func TestGenerateStylesheet(t *testing.T) {
+	tmpDir := t.TempDir()
+	target := filepath.Join(tmpDir, "output")
+
+	gen := &Generator{
+		Target:     target,
+		templateFS: testTemplateFS,
+	}
+
+	if err := os.MkdirAll(target, 0755); err != nil {
+		t.Fatalf("failed to create target dir: %v", err)
+	}
+
+	if err := gen.generateStylesheet(); err != nil {
+		t.Fatalf("generateStylesheet() error = %v", err)
+	}
+
+	// Check that styles.css was created
+	cssPath := filepath.Join(target, "styles.css")
+	content, err := os.ReadFile(cssPath)
+	if err != nil {
+		t.Fatalf("styles.css was not created: %v", err)
+	}
+
+	// Verify it contains CSS content (test stub has "body")
+	if !strings.Contains(string(content), "body") {
+		t.Error("styles.css should contain CSS content")
+	}
+}
+
+func TestGenerateThemeScript(t *testing.T) {
+	tmpDir := t.TempDir()
+	target := filepath.Join(tmpDir, "output")
+
+	gen := &Generator{
+		Target:     target,
+		templateFS: testTemplateFS,
+	}
+
+	if err := os.MkdirAll(target, 0755); err != nil {
+		t.Fatalf("failed to create target dir: %v", err)
+	}
+
+	if err := gen.generateThemeScript(); err != nil {
+		t.Fatalf("generateThemeScript() error = %v", err)
+	}
+
+	// Check that theme.js was created
+	jsPath := filepath.Join(target, "theme.js")
+	content, err := os.ReadFile(jsPath)
+	if err != nil {
+		t.Fatalf("theme.js was not created: %v", err)
+	}
+
+	// Verify it contains JavaScript content (test stub has "console")
+	if !strings.Contains(string(content), "console") {
+		t.Error("theme.js should contain JavaScript content")
+	}
+}
