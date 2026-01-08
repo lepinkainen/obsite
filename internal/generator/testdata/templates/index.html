@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html>
+<head><title>{{.Site.Title}}</title></head>
+<body>
+{{range .Posts}}
+<article><h2>{{.Title}}</h2></article>
+{{end}}
+{{if .PrevPage}}<a href="{{.PrevPage}}">Newer Posts</a>{{end}}
+{{if .NextPage}}<a href="{{.NextPage}}">Older Posts</a>{{end}}
+</body>
+</html>
