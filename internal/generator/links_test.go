@@ -114,3 +114,41 @@ func TestLinkResolver_BrokenLinkError(t *testing.T) {
 		t.Errorf("expected link text '[[Missing Page]]', got %q", err.LinkText)
 	}
 }
+
+func TestLinkError_Error(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      LinkError
+		wantPart []string
+	}{
+		{
+			name: "formats source file basename",
+			err: LinkError{
+				SourceFile: "/path/to/my-post.md",
+				LinkText:   "[[Missing]]",
+				TargetSlug: "missing",
+			},
+			wantPart: []string{"my-post.md", "[[Missing]]", "missing"},
+		},
+		{
+			name: "includes all fields",
+			err: LinkError{
+				SourceFile: "test.md",
+				LinkText:   "[link](broken.md)",
+				TargetSlug: "broken",
+			},
+			wantPart: []string{"test.md", "[link](broken.md)", "broken"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.err.Error()
+			for _, part := range tt.wantPart {
+				if !strings.Contains(got, part) {
+					t.Errorf("Error() = %q, want to contain %q", got, part)
+				}
+			}
+		})
+	}
+}

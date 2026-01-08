@@ -1,9 +1,9 @@
 :root {
     /* Typography */
     --font-stack: 'Fira Code', 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
-    --font-size-base: 15px;
-    --font-size-large: 18px;
-    --font-size-small: 13px;
+    --font-size-base: 16px;
+    --font-size-large: 1.125em;  /* ~18px at 16px base */
+    --font-size-small: 0.875em;  /* ~14px at 16px base */
     --line-height: 1.6;
 
     /* Spacing */
@@ -56,6 +56,7 @@ html {
 
 body {
     font-family: var(--font-stack);
+    font-weight: 300;
     font-size: var(--font-size-base);
     line-height: var(--line-height);
     max-width: var(--max-width);
@@ -295,6 +296,34 @@ blockquote {
     border-left: 3px solid var(--accent-hover);
     margin-left: 0;
     padding-left: var(--space-md);
+}
+
+blockquote.quote-verbatim {
+    border-left: none;
+    padding-left: 0;
+    margin: var(--space-md) 0;
+    text-indent: 23px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='11' y='171' font-family='Times New Roman, serif' font-size='180' fill='%2326ffa6'%3E%E2%80%9C%3C/text%3E%3C/svg%3E");
+    background-size: 23px 23px;
+    background-repeat: no-repeat;
+    background-position: 0 -5px;
+}
+
+blockquote.quote-verbatim p:last-child {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='11' y='171' font-family='Times New Roman, serif' font-size='180' fill='%2326ffa6'%3E%E2%80%9D%3C/text%3E%3C/svg%3E");
+    background-size: 23px 23px;
+    background-repeat: no-repeat;
+    background-position: bottom 2px right;
+    padding-right: 25px;
+    display: inline;
+}
+
+[data-theme="light"] blockquote.quote-verbatim {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='11' y='171' font-family='Times New Roman, serif' font-size='180' fill='%230d8a5f'%3E%E2%80%9C%3C/text%3E%3C/svg%3E");
+}
+
+[data-theme="light"] blockquote.quote-verbatim p:last-child {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='11' y='171' font-family='Times New Roman, serif' font-size='180' fill='%230d8a5f'%3E%E2%80%9D%3C/text%3E%3C/svg%3E");
 }
 
 .pagination {

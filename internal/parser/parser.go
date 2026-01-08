@@ -11,6 +11,7 @@ import (
 
 	"obsite/internal/models"
 
+	attributes "github.com/mdigger/goldmark-attributes"
 	"github.com/yuin/goldmark"
 	"gopkg.in/yaml.v3"
 )
@@ -78,7 +79,7 @@ func Parse(content string) (*models.Post, error) {
 // Call this after resolving internal links.
 func ConvertMarkdown(post *models.Post) error {
 	var buf bytes.Buffer
-	md := goldmark.New()
+	md := goldmark.New(attributes.Enable)
 	if err := md.Convert([]byte(post.Content), &buf); err != nil {
 		return err
 	}

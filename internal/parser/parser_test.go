@@ -3,8 +3,13 @@ package parser
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"obsite/internal/models"
 )
+
+var updateGolden = os.Getenv("UPDATE_GOLDEN") == "true"
 
 func TestParse_WithFrontmatter(t *testing.T) {
 	input := `---
@@ -212,5 +217,54 @@ Content.`
 	}
 	if post.Slug != "custom-slug" {
 		t.Errorf("Slug = %q, want %q", post.Slug, "custom-slug")
+	}
+}
+
+func TestConvertMarkdown_GoldenFiles(t *testing.T) {
+	inputFiles, err := filepath.Glob("testdata/*.input.md")
+	if err != nil {
+		t.Fatalf("failed to glob input files: %v", err)
+	}
+
+	if len(inputFiles) == 0 {
+		t.Fatal("no input files found in testdata/")
+	}
+
+	for _, inputFile := range inputFiles {
+		name := strings.TrimSuffix(filepath.Base(inputFile), ".input.md")
+
+		t.Run(name, func(t *testing.T) {
+			input, err := os.ReadFile(inputFile)
+			if err != nil {
+				t.Fatalf("failed to read input file: %v", err)
+			}
+
+			post := &models.Post{
+				Content: string(input),
+			}
+
+			if err := ConvertMarkdown(post); err != nil {
+				t.Fatalf("ConvertMarkdown() error = %v", err)
+			}
+
+			got := string(post.HTML)
+			goldenFile := strings.Replace(inputFile, ".input.md", ".golden.html", 1)
+
+			if updateGolden {
+				if err := os.WriteFile(goldenFile, []byte(got), 0644); err != nil {
+					t.Fatalf("failed to update golden file: %v", err)
+				}
+				return
+			}
+
+			expected, err := os.ReadFile(goldenFile)
+			if err != nil {
+				t.Fatalf("failed to read golden file %s: %v", goldenFile, err)
+			}
+
+			if got != string(expected) {
+				t.Errorf("output mismatch\ngot:\n%s\nwant:\n%s", got, expected)
+			}
+		})
 	}
 }
