@@ -1,5 +1,5 @@
 # Taskfile for obsite (https://taskfile.dev/)
-version: '3'
+version: "3"
 
 vars:
   BUILD_DIR: build
@@ -64,7 +64,10 @@ tasks:
       - internal/**/*.go
       - templates/**/*
     generates:
-      - "{{.BUILD_DIR}}/{{.PROJECT_NAME}}"
+      #- "{{.BUILD_DIR}}/{{.PROJECT_NAME}}"
+      - build/obsite
+    status:
+      - test -f {{.BUILD_DIR}}/{{.PROJECT_NAME}}
 
   test-go:
     desc: Run Go tests
