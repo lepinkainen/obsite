@@ -1,8 +1,12 @@
 package generator
 
 import (
+	"bytes"
 	"embed"
 	"fmt"
+	"html/template"
+	"image"
+	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
@@ -750,4 +754,257 @@ func TestGenerateIndex_Pagination_TableDriven(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestCollectPosts_WithBundle(t *testing.T) {
+	tmpDir := t.TempDir()
+	sourceDir := filepath.Join(tmpDir, "source")
+	targetDir := filepath.Join(tmpDir, "target")
+
+	// Create a page bundle
+	bundleDir := filepath.Join(sourceDir, "test-bundle")
+	if err := os.MkdirAll(bundleDir, 0755); err != nil {
+		t.Fatalf("failed to create bundle dir: %v", err)
+	}
+
+	indexContent := `---
+title: Bundle Post
+created: 2024-01-15
+---
+Bundle content`
+
+	if err := os.WriteFile(filepath.Join(bundleDir, "index.md"), []byte(indexContent), 0644); err != nil {
+		t.Fatalf("failed to create index.md: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(bundleDir, "cover.jpg"), []byte("fake image"), 0644); err != nil {
+		t.Fatalf("failed to create image: %v", err)
+	}
+
+	// Create a single post
+	singleContent := `---
+title: Single Post
+created: 2024-01-16
+---
+Single content`
+
+	if err := os.WriteFile(filepath.Join(sourceDir, "single.md"), []byte(singleContent), 0644); err != nil {
+		t.Fatalf("failed to create single post: %v", err)
+	}
+
+	gen := New(sourceDir, targetDir, testTemplateFS)
+
+	if err := gen.collectPosts(); err != nil {
+		t.Fatalf("collectPosts() error = %v", err)
+	}
+
+	if len(gen.Posts) != 2 {
+		t.Errorf("collectPosts() got %d posts, want 2", len(gen.Posts))
+	}
+
+	// Find bundle post
+	var bundlePost *models.Post
+	var singlePost *models.Post
+	for _, p := range gen.Posts {
+		switch p.Title {
+		case "Bundle Post":
+			bundlePost = p
+		case "Single Post":
+			singlePost = p
+		}
+	}
+
+	if bundlePost == nil {
+		t.Fatal("bundle post not found")
+	}
+	if singlePost == nil {
+		t.Fatal("single post not found")
+	}
+
+	if bundlePost.BundleDir != bundleDir {
+		t.Errorf("bundle post BundleDir = %q, want %q", bundlePost.BundleDir, bundleDir)
+	}
+
+	if singlePost.BundleDir != "" {
+		t.Errorf("single post BundleDir = %q, want empty", singlePost.BundleDir)
+	}
+}
+
+func TestGeneratePost_WithBundle(t *testing.T) {
+	tmpDir := t.TempDir()
+	sourceDir := filepath.Join(tmpDir, "source")
+	targetDir := filepath.Join(tmpDir, "target")
+	bundleDir := filepath.Join(sourceDir, "test-bundle")
+
+	// Create bundle structure
+	if err := os.MkdirAll(bundleDir, 0755); err != nil {
+		t.Fatalf("failed to create bundle dir: %v", err)
+	}
+
+	indexContent := `---
+title: Bundle Test
+created: 2024-01-15
+---
+Post content`
+
+	if err := os.WriteFile(filepath.Join(bundleDir, "index.md"), []byte(indexContent), 0644); err != nil {
+		t.Fatalf("failed to create index.md: %v", err)
+	}
+
+	if err := os.WriteFile(filepath.Join(bundleDir, "cover.jpg"), []byte("fake image data"), 0644); err != nil {
+		t.Fatalf("failed to create image: %v", err)
+	}
+
+	post := &models.Post{
+		Title:     "Bundle Test",
+		Slug:      "test-bundle",
+		Created:   models.FlexibleTime{Time: time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)},
+		Content:   "Post content",
+		HTML:      template.HTML("<p>Post content</p>"),
+		BundleDir: bundleDir,
+	}
+	post.URL = post.URLPath()
+
+	gen := New(sourceDir, targetDir, testTemplateFS)
+
+	var err error
+	gen.templates, err = gen.templates.ParseFS(testTemplateFS, "testdata/templates/*.html", "testdata/templates/*.xml")
+	if err != nil {
+		t.Fatalf("failed to parse templates: %v", err)
+	}
+
+	if err := gen.generatePost(post); err != nil {
+		t.Fatalf("generatePost() error = %v", err)
+	}
+
+	// Check HTML file exists
+	htmlPath := filepath.Join(targetDir, "2024/01/test-bundle/index.html")
+	if _, err := os.Stat(htmlPath); os.IsNotExist(err) {
+		t.Error("index.html was not created")
+	}
+
+	// Check image was copied
+	imagePath := filepath.Join(targetDir, "2024/01/test-bundle/cover.jpg")
+	if _, err := os.Stat(imagePath); os.IsNotExist(err) {
+		t.Error("cover.jpg was not copied to output directory")
+	}
+}
+
+func TestCopyBundleAssets_WithResize(t *testing.T) {
+	tmpDir := t.TempDir()
+	sourceDir := filepath.Join(tmpDir, "source")
+	targetDir := filepath.Join(tmpDir, "target")
+	bundleDir := filepath.Join(sourceDir, "resize-bundle")
+	outDir := filepath.Join(targetDir, "2024/01/resize-bundle")
+
+	if err := os.MkdirAll(bundleDir, 0755); err != nil {
+		t.Fatalf("failed to create bundle dir: %v", err)
+	}
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		t.Fatalf("failed to create output dir: %v", err)
+	}
+
+	pngData := createTestPNG(t, 400, 300)
+	if err := os.WriteFile(filepath.Join(bundleDir, "test.png"), pngData, 0644); err != nil {
+		t.Fatalf("failed to create test image: %v", err)
+	}
+
+	post := &models.Post{
+		Title:        "Resize Test",
+		Slug:         "resize-bundle",
+		Created:      models.FlexibleTime{Time: time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)},
+		BundleDir:    bundleDir,
+		ImageResizes: map[string]int{"test.png": 200},
+	}
+
+	gen := New(sourceDir, targetDir, testTemplateFS)
+
+	if err := gen.copyBundleAssets(post, outDir); err != nil {
+		t.Fatalf("copyBundleAssets() error = %v", err)
+	}
+
+	dstPath := filepath.Join(outDir, "test.png")
+	if _, err := os.Stat(dstPath); os.IsNotExist(err) {
+		t.Fatal("test.png was not created in output directory")
+	}
+}
+
+func TestCopyBundleAssets_NoUpscale(t *testing.T) {
+	tmpDir := t.TempDir()
+	sourceDir := filepath.Join(tmpDir, "source")
+	targetDir := filepath.Join(tmpDir, "target")
+	bundleDir := filepath.Join(sourceDir, "noupscale-bundle")
+	outDir := filepath.Join(targetDir, "2024/01/noupscale-bundle")
+
+	if err := os.MkdirAll(bundleDir, 0755); err != nil {
+		t.Fatalf("failed to create bundle dir: %v", err)
+	}
+	if err := os.MkdirAll(outDir, 0755); err != nil {
+		t.Fatalf("failed to create output dir: %v", err)
+	}
+
+	pngData := createTestPNG(t, 100, 75)
+	if err := os.WriteFile(filepath.Join(bundleDir, "small.png"), pngData, 0644); err != nil {
+		t.Fatalf("failed to create test image: %v", err)
+	}
+
+	post := &models.Post{
+		Title:        "No Upscale Test",
+		Slug:         "noupscale-bundle",
+		Created:      models.FlexibleTime{Time: time.Date(2024, 1, 15, 0, 0, 0, 0, time.UTC)},
+		BundleDir:    bundleDir,
+		ImageResizes: map[string]int{"small.png": 500},
+	}
+
+	gen := New(sourceDir, targetDir, testTemplateFS)
+
+	if err := gen.copyBundleAssets(post, outDir); err != nil {
+		t.Fatalf("copyBundleAssets() error = %v", err)
+	}
+
+	dstPath := filepath.Join(outDir, "small.png")
+	if _, err := os.Stat(dstPath); os.IsNotExist(err) {
+		t.Fatal("small.png was not created in output directory")
+	}
+}
+
+func TestIsImageFile(t *testing.T) {
+	tests := []struct {
+		filename string
+		want     bool
+	}{
+		{"photo.jpg", true},
+		{"photo.jpeg", true},
+		{"photo.JPG", true},
+		{"image.png", true},
+		{"animation.gif", true},
+		{"modern.webp", true},
+		{"document.pdf", false},
+		{"video.mp4", false},
+		{"readme.txt", false},
+		{"noext", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.filename, func(t *testing.T) {
+			if got := isImageFile(tt.filename); got != tt.want {
+				t.Errorf("isImageFile(%q) = %v, want %v", tt.filename, got, tt.want)
+			}
+		})
+	}
+}
+
+func createTestPNG(t *testing.T, width, height int) []byte {
+	t.Helper()
+	img := image.NewRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
+			img.Set(x, y, image.White)
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		t.Fatalf("failed to encode test PNG: %v", err)
+	}
+	return buf.Bytes()
 }

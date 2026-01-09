@@ -5,12 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"image"
+	"image/gif"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/disintegration/gift"
 
 	"obsite/internal/models"
 	"obsite/internal/parser"
@@ -118,8 +124,29 @@ func (g *Generator) collectPosts() error {
 			return err
 		}
 
-		// Skip non-markdown files
-		if info.IsDir() || !strings.HasSuffix(path, ".md") {
+		// Check if this is a page bundle directory
+		if parser.IsBundleDir(path, info) {
+			post, err := parser.ParseBundle(path)
+			if err != nil {
+				fmt.Printf("Warning: skipping bundle %s: %v\n", path, err)
+				return filepath.SkipDir
+			}
+
+			// Validate and add post
+			if err := g.validateAndAddPost(post, path); err != nil {
+				fmt.Printf("Warning: skipping bundle %s: %v\n", path, err)
+			}
+
+			return filepath.SkipDir // Don't recurse into bundle directories
+		}
+
+		// Skip directories (non-bundles)
+		if info.IsDir() {
+			return nil
+		}
+
+		// Handle single .md files (skip if named index.md - already handled as bundle)
+		if !strings.HasSuffix(path, ".md") || filepath.Base(path) == "index.md" {
 			return nil
 		}
 
@@ -129,25 +156,33 @@ func (g *Generator) collectPosts() error {
 			return nil
 		}
 
-		// Skip drafts unless IncludeDrafts is set
-		if post.IsDraft() && !g.IncludeDrafts {
-			fmt.Printf("Skipping draft: %s\n", post.Title)
-			return nil
+		// Validate and add post
+		if err := g.validateAndAddPost(post, path); err != nil {
+			fmt.Printf("Warning: skipping %s: %v\n", path, err)
 		}
 
-		// Skip posts without required fields
-		if post.Title == "" {
-			fmt.Printf("Warning: skipping %s: no title\n", path)
-			return nil
-		}
-		if post.Created.IsZero() {
-			fmt.Printf("Warning: skipping %s: no created date\n", path)
-			return nil
-		}
-
-		g.Posts = append(g.Posts, post)
 		return nil
 	})
+}
+
+// validateAndAddPost checks required fields and adds post to collection
+func (g *Generator) validateAndAddPost(post *models.Post, _ string) error {
+	// Skip drafts unless IncludeDrafts is set
+	if post.IsDraft() && !g.IncludeDrafts {
+		fmt.Printf("Skipping draft: %s\n", post.Title)
+		return fmt.Errorf("draft post")
+	}
+
+	// Skip posts without required fields
+	if post.Title == "" {
+		return fmt.Errorf("no title")
+	}
+	if post.Created.IsZero() {
+		return fmt.Errorf("no created date")
+	}
+
+	g.Posts = append(g.Posts, post)
+	return nil
 }
 
 // processContent resolves internal links and converts markdown to HTML
@@ -189,6 +224,13 @@ func (g *Generator) generatePost(post *models.Post) error {
 	outDir := filepath.Join(g.Target, post.URLPath())
 	if err := os.MkdirAll(outDir, 0755); err != nil {
 		return err
+	}
+
+	// Copy bundle assets if this is a page bundle
+	if post.BundleDir != "" {
+		if err := g.copyBundleAssets(post, outDir); err != nil {
+			return fmt.Errorf("copying bundle assets: %w", err)
+		}
 	}
 
 	// Create output file
@@ -469,4 +511,123 @@ func copyFile(src, dst string) error {
 	}
 
 	return nil
+}
+
+// copyBundleAssets copies all non-.md files from a bundle directory
+// to the post's output directory, resizing images as needed
+func (g *Generator) copyBundleAssets(post *models.Post, outDir string) error {
+	entries, err := os.ReadDir(post.BundleDir)
+	if err != nil {
+		return err
+	}
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+
+		filename := entry.Name()
+
+		// Skip markdown files
+		if strings.HasSuffix(filename, ".md") {
+			continue
+		}
+
+		// Skip hidden files
+		if strings.HasPrefix(filename, ".") {
+			continue
+		}
+
+		srcPath := filepath.Join(post.BundleDir, filename)
+		dstPath := filepath.Join(outDir, filename)
+
+		if width, needsResize := post.ImageResizes[filename]; needsResize && isImageFile(filename) {
+			if err := resizeImage(srcPath, dstPath, width); err != nil {
+				return fmt.Errorf("resizing %s: %w", filename, err)
+			}
+		} else {
+			if err := copyFile(srcPath, dstPath); err != nil {
+				return fmt.Errorf("copying %s: %w", filename, err)
+			}
+		}
+	}
+
+	return nil
+}
+
+// isImageFile checks if a filename has an image extension
+func isImageFile(filename string) bool {
+	ext := strings.ToLower(filepath.Ext(filename))
+	switch ext {
+	case ".jpg", ".jpeg", ".png", ".gif", ".webp":
+		return true
+	}
+	return false
+}
+
+// resizeImage resizes an image to the specified width, maintaining aspect ratio.
+// If the requested width is larger than the original, the image is copied as-is (no upscaling).
+func resizeImage(srcPath, dstPath string, width int) error {
+	srcFile, err := os.Open(srcPath)
+	if err != nil {
+		return err
+	}
+
+	srcImg, format, err := image.Decode(srcFile)
+	if err != nil {
+		if closeErr := srcFile.Close(); closeErr != nil {
+			return fmt.Errorf("decoding image: %w (close error: %v)", err, closeErr)
+		}
+		return fmt.Errorf("decoding image: %w", err)
+	}
+
+	origWidth := srcImg.Bounds().Dx()
+	if width >= origWidth {
+		if err := srcFile.Close(); err != nil {
+			return err
+		}
+		return copyFile(srcPath, dstPath)
+	}
+
+	if err := srcFile.Close(); err != nil {
+		return err
+	}
+
+	// Check if we support encoding this format
+	switch format {
+	case "jpeg", "png", "gif":
+		// Supported formats, proceed with resize
+	default:
+		// Unsupported format (e.g., webp) - copy original instead
+		fmt.Printf("[WARN] Cannot encode %s format, copying original image\n", format)
+		return copyFile(srcPath, dstPath)
+	}
+
+	g := gift.New(gift.Resize(width, 0, gift.LanczosResampling))
+	dst := image.NewRGBA(g.Bounds(srcImg.Bounds()))
+	g.Draw(dst, srcImg)
+
+	dstFile, err := os.Create(dstPath)
+	if err != nil {
+		return err
+	}
+
+	var encodeErr error
+	switch format {
+	case "jpeg":
+		encodeErr = jpeg.Encode(dstFile, dst, &jpeg.Options{Quality: 85})
+	case "png":
+		encodeErr = png.Encode(dstFile, dst)
+	case "gif":
+		encodeErr = gif.Encode(dstFile, dst, nil)
+	}
+
+	if closeErr := dstFile.Close(); closeErr != nil {
+		if encodeErr != nil {
+			return fmt.Errorf("encoding: %w (close error: %v)", encodeErr, closeErr)
+		}
+		return closeErr
+	}
+
+	return encodeErr
 }
