@@ -268,3 +268,119 @@ func TestConvertMarkdown_GoldenFiles(t *testing.T) {
 		})
 	}
 }
+
+func TestParseBundle(t *testing.T) {
+	tmpDir := t.TempDir()
+	bundleDir := filepath.Join(tmpDir, "my-bundle")
+
+	if err := os.MkdirAll(bundleDir, 0755); err != nil {
+		t.Fatalf("failed to create bundle dir: %v", err)
+	}
+
+	// Create index.md
+	indexContent := `---
+title: Bundle Post
+created: 2024-01-15
+categories:
+  - test
+summary: A test bundle
+---
+Content with ![image](cover.jpg)`
+
+	indexPath := filepath.Join(bundleDir, "index.md")
+	if err := os.WriteFile(indexPath, []byte(indexContent), 0644); err != nil {
+		t.Fatalf("failed to create index.md: %v", err)
+	}
+
+	// Create an image file
+	imagePath := filepath.Join(bundleDir, "cover.jpg")
+	if err := os.WriteFile(imagePath, []byte("fake image"), 0644); err != nil {
+		t.Fatalf("failed to create image: %v", err)
+	}
+
+	post, err := ParseBundle(bundleDir)
+	if err != nil {
+		t.Fatalf("ParseBundle() error = %v", err)
+	}
+
+	if post.Title != "Bundle Post" {
+		t.Errorf("Title = %q, want %q", post.Title, "Bundle Post")
+	}
+
+	if post.BundleDir != bundleDir {
+		t.Errorf("BundleDir = %q, want %q", post.BundleDir, bundleDir)
+	}
+
+	if post.Slug != "my-bundle" {
+		t.Errorf("Slug = %q, want %q", post.Slug, "my-bundle")
+	}
+
+	if post.Summary != "A test bundle" {
+		t.Errorf("Summary = %q, want %q", post.Summary, "A test bundle")
+	}
+
+	if len(post.Categories) != 1 || post.Categories[0] != "test" {
+		t.Errorf("Categories = %v, want [test]", post.Categories)
+	}
+}
+
+func TestParseBundle_MissingIndexMd(t *testing.T) {
+	tmpDir := t.TempDir()
+	bundleDir := filepath.Join(tmpDir, "no-index")
+
+	if err := os.MkdirAll(bundleDir, 0755); err != nil {
+		t.Fatalf("failed to create bundle dir: %v", err)
+	}
+
+	_, err := ParseBundle(bundleDir)
+	if err == nil {
+		t.Error("ParseBundle() expected error for missing index.md, got nil")
+	}
+}
+
+func TestIsBundleDir(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create a bundle directory
+	bundleDir := filepath.Join(tmpDir, "bundle")
+	if err := os.MkdirAll(bundleDir, 0755); err != nil {
+		t.Fatalf("failed to create bundle dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(bundleDir, "index.md"), []byte("test"), 0644); err != nil {
+		t.Fatalf("failed to write index.md: %v", err)
+	}
+
+	// Create a non-bundle directory
+	nonBundleDir := filepath.Join(tmpDir, "not-bundle")
+	if err := os.MkdirAll(nonBundleDir, 0755); err != nil {
+		t.Fatalf("failed to create non-bundle dir: %v", err)
+	}
+
+	bundleInfo, err := os.Stat(bundleDir)
+	if err != nil {
+		t.Fatalf("failed to stat bundle dir: %v", err)
+	}
+
+	if !IsBundleDir(bundleDir, bundleInfo) {
+		t.Error("IsBundleDir() = false for bundle directory, want true")
+	}
+
+	nonBundleInfo, err := os.Stat(nonBundleDir)
+	if err != nil {
+		t.Fatalf("failed to stat non-bundle dir: %v", err)
+	}
+
+	if IsBundleDir(nonBundleDir, nonBundleInfo) {
+		t.Error("IsBundleDir() = true for non-bundle directory, want false")
+	}
+
+	// Test with a file instead of directory
+	fileInfo, err := os.Stat(filepath.Join(bundleDir, "index.md"))
+	if err != nil {
+		t.Fatalf("failed to stat file: %v", err)
+	}
+
+	if IsBundleDir(filepath.Join(bundleDir, "index.md"), fileInfo) {
+		t.Error("IsBundleDir() = true for file, want false")
+	}
+}
