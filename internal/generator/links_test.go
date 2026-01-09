@@ -115,6 +115,68 @@ func TestLinkResolver_BrokenLinkError(t *testing.T) {
 	}
 }
 
+func TestResolve_ObsidianImageWithResize(t *testing.T) {
+	resolver := NewLinkResolver(testPosts())
+
+	post := &models.Post{
+		Content:   "Check this: ![[photo.jpg|300]] and ![[banner.png|150]]",
+		FilePath:  "test.md",
+		BundleDir: "/fake/bundle",
+		Slug:      "test-post",
+		Created:   fixedTime(2024, 1, 15),
+	}
+
+	content, errors := resolver.Resolve(post)
+	if len(errors) > 0 {
+		t.Errorf("unexpected errors: %v", errors)
+	}
+
+	if post.ImageResizes == nil {
+		t.Fatal("ImageResizes map should be initialized")
+	}
+
+	if post.ImageResizes["photo.jpg"] != 300 {
+		t.Errorf("expected photo.jpg resize to 300, got %d", post.ImageResizes["photo.jpg"])
+	}
+
+	if post.ImageResizes["banner.png"] != 150 {
+		t.Errorf("expected banner.png resize to 150, got %d", post.ImageResizes["banner.png"])
+	}
+
+	if !strings.Contains(content, `width="300"`) {
+		t.Errorf("expected HTML with width=300, got: %s", content)
+	}
+
+	if !strings.Contains(content, `width="150"`) {
+		t.Errorf("expected HTML with width=150, got: %s", content)
+	}
+}
+
+func TestResolve_ObsidianImageWithoutResize(t *testing.T) {
+	resolver := NewLinkResolver(testPosts())
+
+	post := &models.Post{
+		Content:   "Normal image: ![[photo.jpg]]",
+		FilePath:  "test.md",
+		BundleDir: "/fake/bundle",
+		Slug:      "test-post",
+		Created:   fixedTime(2024, 1, 15),
+	}
+
+	content, errors := resolver.Resolve(post)
+	if len(errors) > 0 {
+		t.Errorf("unexpected errors: %v", errors)
+	}
+
+	if len(post.ImageResizes) > 0 {
+		t.Errorf("ImageResizes should be empty for images without resize, got %v", post.ImageResizes)
+	}
+
+	if !strings.Contains(content, "![](") {
+		t.Errorf("expected markdown image syntax, got: %s", content)
+	}
+}
+
 func TestLinkError_Error(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -148,6 +210,48 @@ func TestLinkError_Error(t *testing.T) {
 				if !strings.Contains(got, part) {
 					t.Errorf("Error() = %q, want to contain %q", got, part)
 				}
+			}
+		})
+	}
+}
+
+func TestResolve_ObsidianImageWithInvalidWidth(t *testing.T) {
+	resolver := NewLinkResolver(testPosts())
+
+	tests := []struct {
+		name    string
+		content string
+		wantImg string
+	}{
+		{
+			name:    "zero width",
+			content: "Image: ![[photo.jpg|0]]",
+			wantImg: "![](/2024/01/test-post/photo.jpg)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			post := &models.Post{
+				Content:   tt.content,
+				FilePath:  "test.md",
+				BundleDir: "/fake/bundle",
+				Slug:      "test-post",
+				Created:   fixedTime(2024, 1, 15),
+			}
+
+			content, errors := resolver.Resolve(post)
+			if len(errors) > 0 {
+				t.Errorf("unexpected link errors: %v", errors)
+			}
+
+			if !strings.Contains(content, tt.wantImg) {
+				t.Errorf("expected %q in output, got: %s", tt.wantImg, content)
+			}
+
+			// Invalid widths should not create resize entries
+			if len(post.ImageResizes) > 0 {
+				t.Errorf("ImageResizes should be empty for invalid widths, got %v", post.ImageResizes)
 			}
 		})
 	}
