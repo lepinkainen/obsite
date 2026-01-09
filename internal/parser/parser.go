@@ -2,6 +2,7 @@ package parser
 
 import (
 	"bytes"
+	"fmt"
 	"html/template"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 
 	attributes "github.com/mdigger/goldmark-attributes"
 	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/renderer/html"
 	"gopkg.in/yaml.v3"
 )
 
@@ -48,6 +50,45 @@ func ParseFile(path string) (*models.Post, error) {
 	return post, nil
 }
 
+// ParseBundle reads a page bundle (directory with index.md + assets)
+// and returns a Post with BundleDir set to the directory path.
+func ParseBundle(bundleDir string) (*models.Post, error) {
+	indexPath := filepath.Join(bundleDir, "index.md")
+
+	// Check if index.md exists
+	if _, err := os.Stat(indexPath); os.IsNotExist(err) {
+		return nil, fmt.Errorf("index.md not found in bundle: %s", bundleDir)
+	}
+
+	post, err := ParseFile(indexPath)
+	if err != nil {
+		return nil, err
+	}
+
+	// Mark this as a bundle and store the directory
+	post.BundleDir = bundleDir
+
+	// Always derive slug from directory name (overrides filename-based slug)
+	post.Slug = slugFromFilename(bundleDir)
+
+	// Update the URL path with the correct slug
+	post.URL = post.URLPath()
+
+	return post, nil
+}
+
+// IsBundleDir checks if a directory is a page bundle (contains index.md)
+func IsBundleDir(path string, info os.FileInfo) bool {
+	if !info.IsDir() {
+		return false
+	}
+	indexPath := filepath.Join(path, "index.md")
+	if _, err := os.Stat(indexPath); err == nil {
+		return true
+	}
+	return false
+}
+
 // titleFromFilename extracts the title from filename (without extension)
 func titleFromFilename(path string) string {
 	name := filepath.Base(path)
@@ -79,7 +120,10 @@ func Parse(content string) (*models.Post, error) {
 // Call this after resolving internal links.
 func ConvertMarkdown(post *models.Post) error {
 	var buf bytes.Buffer
-	md := goldmark.New(attributes.Enable)
+	md := goldmark.New(
+		attributes.Enable,
+		goldmark.WithRendererOptions(html.WithUnsafe()),
+	)
 	if err := md.Convert([]byte(post.Content), &buf); err != nil {
 		return err
 	}

@@ -59,6 +59,20 @@ type Post struct {
 	Tags        []string     `yaml:"tags"`
 	Description string       `yaml:"description"`
 
+	// Hugo compatibility fields (preserved but not used by templates yet)
+	Categories      []string `yaml:"categories"`
+	Summary         string   `yaml:"summary"`
+	Layout          string   `yaml:"layout"`
+	Type            string   `yaml:"type"`
+	Highlight       *bool    `yaml:"highlight"`       // Pointer to distinguish false vs unset
+	ShowFullContent *bool    `yaml:"showFullContent"` // Pointer to distinguish false vs unset
+
+	// Page bundle support
+	BundleDir string // Directory path if this is a page bundle
+
+	// Image resize tracking (maps image filename to requested width)
+	ImageResizes map[string]int
+
 	// Computed fields
 	Content  string        // Raw markdown content
 	HTML     template.HTML // Rendered HTML (safe for template output)
